@@ -1,12 +1,42 @@
 # 🚂 Deutsche Express
 
-A local German-vocabulary flashcard app. Upload CSV or comma-separated word
-lists, study them as flip cards grouped by the day you added them, and track
-your progress per word and per day.
+I started studying German because apparently my life did not already contain
+enough rules, exceptions, grammatical genders, and words long enough to qualify
+as short-term rental agreements.
 
-**Stack:** Next.js (App Router) · React · tRPC · Prisma · PostgreSQL · Tailwind CSS · shadcn/ui · Docker
+Naturally, my ADHD brain responded by forgetting yesterday’s vocabulary,
+opening fourteen unrelated tabs, reorganizing the study plan, and building an
+entire web application instead of simply reviewing the flashcards.
 
-## Run locally with PostgreSQL in Docker
+So here it is: **Deutsche Express**, a German-vocabulary tracker for anyone who
+would rather engineer a spaced-repetition-adjacent database system than remember
+whether a table is masculine, feminine, or spiritually neutral.
+
+**Stack:** Next.js · React · tRPC · Prisma · PostgreSQL · Tailwind CSS · shadcn/ui
+
+## What this monument to productive procrastination does
+
+- Uploads vocabulary from CSV or pasted text, because typing each word manually
+  would be an outrageous use of the time we are definitely spending efficiently.
+- Groups words by the day they were added, allowing you to revisit the exact date
+  on which optimism briefly defeated executive dysfunction.
+- Provides flashcard and typed-answer modes.
+- Accepts umlaut substitutions such as `schoen` for `schön`, because installing a
+  German keyboard layout should not become this week’s completely unrelated quest.
+- Tracks correct answers, mistakes, streaks, and learned words in PostgreSQL. Your
+  failures are now durable, indexed, and professionally normalized.
+- Stores study sessions and the actual wrong answers you typed.
+- Shows yesterday’s mistakes, frequently missed words, and mistakes from previous
+  sessions, in case forgetting them once lacked sufficient ceremony.
+- Lets you revisit previous cards without recording the answer twice.
+- Copies words and example sentences separately, saving several devastating
+  milliseconds of text selection.
+
+## Running it
+
+Only PostgreSQL runs in Docker. The application runs directly on your machine,
+because putting absolutely everything in containers would risk finishing the
+project before discovering a new infrastructure concern.
 
 ```bash
 npm install
@@ -15,67 +45,82 @@ npm run db:migrate
 npm run dev
 ```
 
-Then open <http://localhost:3000>. Docker runs only PostgreSQL; Next.js and
-Prisma run directly on your machine. Database data persists in the `db-data`
-Docker volume across restarts.
+Open <http://localhost:3000>, then study German instead of staring proudly at the
+terminal output.
 
-The local app reads `DATABASE_URL` from `.env`. It should point to the database
-port exposed by Docker:
+The app reads `DATABASE_URL` from `.env`:
 
 ```env
 DATABASE_URL="postgresql://deutsch:deutsch@localhost:5432/deutsche_express"
 ```
 
+Database data persists in the Docker volume, so restarting your computer will not
+erase your progress. You will need to forget the words yourself.
+
 ## CSV format
 
-Four comma-separated columns — the last two are optional. A header row is
-detected and skipped automatically. Wrap a field in double quotes if it
-contains a comma. Try `sample-words.csv` in this repo.
+Use four comma-separated columns. The example columns are optional, much like my
+original intention to keep this project small.
 
 ```csv
 german,english,german_sentence,english_sentence
 der Hund,the dog,Der Hund schläft im Garten.,The dog is sleeping in the garden.
 ```
 
-You can upload a `.csv`/`.txt` file or paste the lines directly on the
-**Upload** page. Words land in the deck for the day you upload them;
-duplicates (same German + English pair) are skipped automatically.
+Headers are detected automatically. Fields containing commas should be wrapped in
+double quotes. Duplicate German-English pairs are skipped, because the app has at
+least one functioning memory system.
 
 ## How progress works
 
-- Every flashcard answer is recorded as a review.
-- Reviews are grouped into study sessions. Missed typed answers also retain what
-  you entered and whether the problem was the article, a wrong answer, or a reveal.
-- **New** → never studied. **Learning** → studied at least once.
-  **Learned** → answered correctly 3 times in a row (a miss resets the streak).
-- The dashboard shows totals, today's review count, overall accuracy, and a
-  per-day progress bar (learned / learning / new).
-- Decks: any single day, **All words**, or **Practice unlearned**.
-- The **Mistakes** page ranks frequently missed words and lets you replay misses
-  from yesterday or from an individual recent session.
-- Two study modes, switchable mid-session: **Flashcards** (flip and self-grade)
-  and **Type answer** (you type the German for the shown English and it's
-  checked for you — umlaut-friendly, so `schoen` counts for `schön`, with a
-  hint when only the article is wrong).
+- Every answer becomes a review record.
+- A new word starts as **New**.
+- Once reviewed, it becomes **Learning**.
+- Three correct answers in a row mark it **Learned**.
+- One wrong answer resets the streak, because German believes character is built
+  through immediate and measurable consequences.
+- Typed mistakes retain your submitted answer and whether the issue was an article,
+  an incorrect word, or the dignified surrender of pressing “I don’t know.”
 
-Keyboard shortcuts while studying: **space** flips the card, **→** = got it,
-**←** = missed it. In type mode, **enter** checks your answer and moves on.
+Available decks include all words, unlearned words, words from a specific day, and
+the ever-growing museum exhibit titled **Mistakes**.
+
+## Keyboard shortcuts
+
+- `Space` or `Enter`: flip a flashcard.
+- `→`: mark it correct.
+- `←`: mark it incorrect.
+- In typing mode, `Enter`: check the answer or continue.
+
+These shortcuts save enough time to open another tab without interrupting the
+study session.
 
 ## Project layout
 
-```
-prisma/schema.prisma        # Word, Review, and StudySession models (PostgreSQL)
-src/server/                 # tRPC routers (words, study, stats) + CSV parser
-src/app/                    # pages: dashboard, /upload, /study/[deck], /day/[date]
-src/components/             # flashcard session, day browser
-docker-compose.yml          # local PostgreSQL service only
+```text
+prisma/schema.prisma        Word, review, and study-session models
+prisma/migrations/          Permanent historical record of database decisions
+src/server/                 tRPC routers and CSV parsing
+src/app/                    Next.js pages and API routes
+src/components/             Flashcards, tables, and buttons for coping efficiently
+docker-compose.yml          PostgreSQL, and only PostgreSQL
 ```
 
-## Useful commands
+## Commands I will absolutely remember without checking this section
 
 ```bash
-npm run db:studio      # browse the database in Prisma Studio
-npm run db:up          # start PostgreSQL; remove any old app container
-npm run db:down        # stop PostgreSQL (data is preserved)
-npm run db:migrate     # apply migrations (prisma migrate deploy)
+npm run dev             # run the app locally
+npm run build           # verify that optimism compiles
+npm run db:up           # start PostgreSQL in Docker
+npm run db:down         # stop PostgreSQL; preserve the data
+npm run db:migrate      # apply database migrations
+npm run db:studio       # inspect the database and confront the evidence
 ```
+
+## The actual goal
+
+The goal is still to learn German.
+
+The application is finished enough. Close the editor. Review the words.
+
+Yes, even the articles.
