@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WordStatus {
+  NEW
+  LEARNING
+  LEARNED
+}
+
+model Word {
+  id             Int        @id @default(autoincrement())
+  german         String
+  english        String
+  exampleGerman  String?
+  exampleEnglish String?
+  addedOn        DateTime   @db.Date
+  createdAt      DateTime   @default(now())
+  status         WordStatus @default(NEW)
+  correct        Int        @default(0)
+  incorrect      Int        @default(0)
+  streak         Int        @default(0)
+  lastReviewedAt DateTime?
+  reviews        Review[]
+
+  @@unique([german, english])
+  @@index([addedOn])
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  wordId     Int
+  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  correct    Boolean
+  reviewedAt DateTime @default(now())
+
+  @@index([reviewedAt])
+}

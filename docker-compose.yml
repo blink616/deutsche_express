@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deutsch
+      POSTGRES_PASSWORD: deutsch
+      POSTGRES_DB: deutsche_express
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deutsch -d deutsche_express"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://deutsch:deutsch@db:5432/deutsche_express
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
