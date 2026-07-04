@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarIcon, GraduationCap, Target } from "lucide-react";
+import { ArrowRight, CalendarIcon, CircleAlert, GraduationCap, Target } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -28,7 +28,7 @@ export default function StudyIndexPage() {
         <p className="mt-1 text-muted-foreground">Pick a deck to practice.</p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2">
+      <section className="grid gap-4 sm:grid-cols-3">
         <Link href="/study/all" className="group">
           <Card className="h-full transition-shadow group-hover:shadow-md">
             <CardHeader>
@@ -46,6 +46,16 @@ export default function StudyIndexPage() {
                 <Target className="size-4" /> Needs practice
               </CardTitle>
               <CardDescription>Only words you haven&apos;t learned yet.</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/study/mistakes" className="group">
+          <Card className="h-full transition-shadow group-hover:shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CircleAlert className="size-4" /> Mistakes
+              </CardTitle>
+              <CardDescription>Words you&apos;ve missed before.</CardDescription>
             </CardHeader>
           </Card>
         </Link>

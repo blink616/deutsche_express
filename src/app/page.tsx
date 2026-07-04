@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowRight,
   CheckCircle2,
+  CircleAlert,
   FolderOpen,
   GraduationCap,
   Layers,
@@ -45,6 +46,17 @@ export default function DashboardPage() {
                 <Target /> Practice unlearned
               </Link>
             </Button>
+            {overview.data.mistakes > 0 && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                asChild
+              >
+                <Link href="/mistakes">
+                  <CircleAlert /> Mistakes ({overview.data.mistakes})
+                </Link>
+              </Button>
+            )}
           </div>
         )}
       </section>

@@ -52,6 +52,24 @@ export const wordsRouter = router({
     return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
   }),
 
+  mistakes: publicProcedure.query(async () => {
+    const words = await prisma.word.findMany({
+      where: { incorrect: { gt: 0 }, status: { not: "LEARNED" } },
+      orderBy: [{ incorrect: "desc" }, { lastReviewedAt: "desc" }],
+      include: {
+        reviews: {
+          where: { correct: false },
+          orderBy: { reviewedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+    return words.map(({ reviews, ...w }) => ({
+      ...w,
+      lastMissedAt: reviews[0]?.reviewedAt ?? null,
+    }));
+  }),
+
   byDate: publicProcedure
     .input(z.object({ date: dateString }))
     .query(({ input }) =>

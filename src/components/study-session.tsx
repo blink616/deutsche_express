@@ -2,6 +2,8 @@
 
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   FolderOpen,
   Keyboard,
@@ -15,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { CopyButton } from "@/components/copy-button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { formatDay } from "@/lib/format";
@@ -55,6 +58,7 @@ function gradeAnswer(input: string, expected: string): { correct: boolean; artic
 function deckTitle(deck: string): string {
   if (deck === "all") return "All words";
   if (deck === "practice") return "Needs practice";
+  if (deck === "mistakes") return "Mistake review";
   if (/^\d{4}-\d{2}-\d{2}$/.test(deck)) return formatDay(deck);
   return deck;
 }
@@ -62,13 +66,15 @@ function deckTitle(deck: string): string {
 export function StudySession({
   deck,
   initialMode = "flip",
+  mistakeFilter,
 }: {
   deck: string;
   initialMode?: Mode;
+  mistakeFilter?: { from?: Date; to?: Date; sessionId?: string };
 }) {
   const utils = trpc.useUtils();
   const deckQuery = trpc.study.deck.useQuery(
-    { deck },
+    { deck, ...mistakeFilter },
     { refetchOnWindowFocus: false, refetchOnReconnect: false, staleTime: Infinity },
   );
   const review = trpc.study.review.useMutation();
@@ -79,16 +85,31 @@ export function StudySession({
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState<Checked | null>(null);
   const [results, setResults] = useState<Result[]>([]);
+  const [reviewingHistory, setReviewingHistory] = useState(false);
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const cards = deckQuery.data;
   const card = cards?.[index];
   const done = !!cards && cards.length > 0 && index >= cards.length;
+  const revisiting = reviewingHistory;
+  const previousResult = revisiting ? results[index] : undefined;
 
-  function record(correct: boolean) {
-    if (!card) return;
-    review.mutate({ wordId: card.id, correct });
+  async function record(
+    correct: boolean,
+    details?: {
+      submittedAnswer?: string;
+      mistakeKind?: "SELF_REPORTED" | "INCORRECT_ANSWER" | "ARTICLE" | "REVEALED";
+    },
+  ) {
+    if (!card) return false;
+    try {
+      await review.mutateAsync({ wordId: card.id, correct, sessionId, deck, mode, ...details });
+    } catch {
+      return false;
+    }
     setResults((r) => [...r, { wordId: card.id, correct }]);
+    return true;
   }
 
   function advance() {
@@ -96,29 +117,59 @@ export function StudySession({
     setFlipped(false);
     setTyped("");
     setChecked(null);
+    setReviewingHistory(false);
     const next = index + 1;
     setIndex(next);
     if (next >= cards.length) {
       utils.stats.invalidate();
       utils.words.invalidate();
+      utils.mistakes.invalidate();
     }
   }
 
-  function answer(correct: boolean) {
-    record(correct);
-    advance();
+  function goBack() {
+    if (index === 0 || review.isPending) return;
+    setIndex((current) => current - 1);
+    setReviewingHistory(true);
+    setFlipped(false);
+    setTyped("");
+    setChecked(null);
   }
 
-  function check() {
+  function goForward() {
+    if (!revisiting || review.isPending) return;
+    const next = index + 1;
+    setIndex(next);
+    setReviewingHistory(next < results.length);
+    setFlipped(false);
+    setTyped("");
+    setChecked(null);
+  }
+
+  async function answer(correct: boolean) {
+    if (await record(correct, correct ? undefined : { mistakeKind: "SELF_REPORTED" })) {
+      advance();
+    }
+  }
+
+  async function check() {
     if (!card || typed.trim() === "") return;
     const grade = gradeAnswer(typed, card.german);
-    record(grade.correct);
-    setChecked({ ...grade, revealed: false });
+    const recorded = await record(grade.correct, {
+      submittedAnswer: typed.trim(),
+      mistakeKind: grade.correct
+        ? undefined
+        : grade.articleHint
+          ? "ARTICLE"
+          : "INCORRECT_ANSWER",
+    });
+    if (recorded) setChecked({ ...grade, revealed: false });
   }
 
-  function reveal() {
-    record(false);
-    setChecked({ correct: false, articleHint: false, revealed: true });
+  async function reveal() {
+    if (await record(false, { mistakeKind: "REVEALED" })) {
+      setChecked({ correct: false, articleHint: false, revealed: true });
+    }
   }
 
   async function restart() {
@@ -127,6 +178,9 @@ export function StudySession({
     setTyped("");
     setChecked(null);
     setResults([]);
+    setReviewingHistory(false);
+    setSessionId(crypto.randomUUID());
+    review.reset();
     await deckQuery.refetch();
   }
 
@@ -153,24 +207,35 @@ export function StudySession({
   }
 
   useEffect(() => {
-    if (mode === "type" && checked === null && !done) inputRef.current?.focus();
-  }, [mode, index, checked, done, cards]);
+    if (mode === "type" && checked === null && !done && !revisiting) {
+      inputRef.current?.focus();
+    }
+  }, [mode, index, checked, done, revisiting, cards]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (done || !card) return;
+      if (done || !card || review.isPending) return;
+      if (revisiting) {
+        if (["ArrowLeft", "ArrowRight", "Enter", " "].includes(e.key)) {
+          e.preventDefault();
+        }
+        if (e.key === "ArrowLeft") goBack();
+        else if (e.key === "ArrowRight" || e.key === "Enter") goForward();
+        else if (mode === "flip" && e.key === " ") setFlipped((value) => !value);
+        return;
+      }
       if (mode === "flip") {
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
           setFlipped((f) => !f);
         } else if (flipped && e.key === "ArrowLeft") {
-          answer(false);
+          void answer(false);
         } else if (flipped && e.key === "ArrowRight") {
-          answer(true);
+          void answer(true);
         }
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (checked === null) check();
+        if (checked === null) void check();
         else advance();
       }
     }
@@ -201,7 +266,7 @@ export function StudySession({
       <Card className="mx-auto max-w-lg border-dashed">
         <CardContent className="flex flex-col items-center p-10 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary">
-            {deck === "practice" ? (
+            {deck === "practice" || deck === "mistakes" ? (
               <PartyPopper className="size-5 text-muted-foreground" />
             ) : (
               <FolderOpen className="size-5 text-muted-foreground" />
@@ -210,7 +275,9 @@ export function StudySession({
           <p className="mt-4 font-semibold">
             {deck === "practice"
               ? "Nothing needs practice — everything is learned!"
-              : "This deck is empty"}
+              : deck === "mistakes"
+                ? "No mistakes to practice — nice work!"
+                : "This deck is empty"}
           </p>
           <div className="mt-5 flex gap-2">
             <Button asChild>
@@ -253,6 +320,9 @@ export function StudySession({
               </span>
             </p>
             <div className="mt-6 flex justify-center gap-2">
+              <Button variant="outline" onClick={goBack}>
+                <ChevronLeft /> Previous card
+              </Button>
               <Button onClick={restart}>
                 <RotateCcw /> Study again
               </Button>
@@ -309,6 +379,11 @@ export function StudySession({
         </div>
       </div>
       <Progress value={(index / cards.length) * 100} />
+      {review.error && (
+        <p className="text-sm text-destructive">
+          Couldn&apos;t save that answer. Please try again: {review.error.message}
+        </p>
+      )}
 
       {mode === "flip" ? (
         <>
@@ -322,8 +397,16 @@ export function StudySession({
                   German
                 </div>
                 <div className="mt-4 text-4xl font-bold tracking-tight">{card!.german}</div>
+                <CopyButton text={card!.german} label="Copy word" className="mt-2" />
                 {card!.exampleGerman && (
-                  <p className="mt-5 text-muted-foreground italic">{card!.exampleGerman}</p>
+                  <div className="mt-5">
+                    <p className="text-muted-foreground italic">{card!.exampleGerman}</p>
+                    <CopyButton
+                      text={card!.exampleGerman}
+                      label="Copy example"
+                      className="mt-1"
+                    />
+                  </div>
                 )}
               </div>
               <div className="flip-back flip-face flex flex-col items-center justify-center rounded-3xl border bg-card p-10 text-center shadow-sm">
@@ -331,30 +414,67 @@ export function StudySession({
                   English
                 </div>
                 <div className="mt-4 text-4xl font-bold tracking-tight">{card!.english}</div>
+                <CopyButton text={card!.english} label="Copy word" className="mt-2" />
                 {card!.exampleEnglish && (
-                  <p className="mt-5 text-muted-foreground italic">{card!.exampleEnglish}</p>
+                  <div className="mt-5">
+                    <p className="text-muted-foreground italic">{card!.exampleEnglish}</p>
+                    <CopyButton
+                      text={card!.exampleEnglish}
+                      label="Copy example"
+                      className="mt-1"
+                    />
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
           {!flipped ? (
-            <Button size="lg" className="w-full" onClick={() => setFlipped(true)}>
-              Show answer <span className="text-primary-foreground/60">(space)</span>
-            </Button>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <Button size="lg" variant="destructive" onClick={() => answer(false)}>
-                <X /> Missed it <span className="opacity-60">(←)</span>
-              </Button>
-              <Button
-                size="lg"
-                className="bg-good text-white hover:bg-good/90"
-                onClick={() => answer(true)}
-              >
-                <Check /> Got it <span className="text-white/70">(→)</span>
+            <div className={index > 0 ? "grid grid-cols-2 gap-3" : ""}>
+              {index > 0 && (
+                <Button size="lg" variant="outline" onClick={goBack}>
+                  <ChevronLeft /> Previous card
+                </Button>
+              )}
+              <Button size="lg" className="w-full" onClick={() => setFlipped(true)}>
+                Show answer <span className="text-primary-foreground/60">(space)</span>
               </Button>
             </div>
+          ) : revisiting ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Button size="lg" variant="outline" onClick={goBack} disabled={index === 0}>
+                <ChevronLeft /> Previous card
+              </Button>
+              <Button size="lg" onClick={goForward}>
+                Next card <ChevronRight />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  size="lg"
+                  variant="destructive"
+                  onClick={() => void answer(false)}
+                  disabled={review.isPending}
+                >
+                  <X /> Missed it <span className="opacity-60">(←)</span>
+                </Button>
+                <Button
+                  size="lg"
+                  className="bg-good text-white hover:bg-good/90"
+                  onClick={() => void answer(true)}
+                  disabled={review.isPending}
+                >
+                  <Check /> Got it <span className="text-white/70">(→)</span>
+                </Button>
+              </div>
+              {index > 0 && (
+                <Button size="lg" variant="outline" className="mt-3 w-full" onClick={goBack}>
+                  <ChevronLeft /> Previous card
+                </Button>
+              )}
+            </>
           )}
         </>
       ) : (
@@ -365,11 +485,47 @@ export function StudySession({
                 English
               </div>
               <div className="mt-4 text-4xl font-bold tracking-tight">{card!.english}</div>
+              <CopyButton text={card!.english} label="Copy word" className="mt-2" />
               {card!.exampleEnglish && (
-                <p className="mt-4 text-muted-foreground italic">{card!.exampleEnglish}</p>
+                <div className="mt-4">
+                  <p className="text-muted-foreground italic">{card!.exampleEnglish}</p>
+                  <CopyButton
+                    text={card!.exampleEnglish}
+                    label="Copy example"
+                    className="mt-1"
+                  />
+                </div>
               )}
 
-              {checked === null ? (
+              {revisiting ? (
+                <div className="mt-8 w-full max-w-sm">
+                  <p
+                    className={
+                      previousResult?.correct
+                        ? "font-semibold text-good"
+                        : "font-semibold text-destructive"
+                    }
+                  >
+                    {previousResult?.correct ? (
+                      <><Check className="mr-1 inline size-4" /> Previously correct</>
+                    ) : (
+                      <><X className="mr-1 inline size-4" /> Previously missed</>
+                    )}
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight">{card!.german}</p>
+                  <CopyButton text={card!.german} label="Copy word" className="mt-2" />
+                  {card!.exampleGerman && (
+                    <div className="mt-3">
+                      <p className="text-muted-foreground italic">{card!.exampleGerman}</p>
+                      <CopyButton
+                        text={card!.exampleGerman}
+                        label="Copy example"
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : checked === null ? (
                 <div className="mt-8 w-full max-w-sm space-y-3">
                   <Input
                     ref={inputRef}
@@ -417,32 +573,68 @@ export function StudySession({
                     </p>
                   )}
                   <p className="mt-3 text-3xl font-bold tracking-tight">{card!.german}</p>
+                  <CopyButton text={card!.german} label="Copy word" className="mt-2" />
                   {card!.exampleGerman && (
-                    <p className="mt-3 text-muted-foreground italic">{card!.exampleGerman}</p>
+                    <div className="mt-3">
+                      <p className="text-muted-foreground italic">{card!.exampleGerman}</p>
+                      <CopyButton
+                        text={card!.exampleGerman}
+                        label="Copy example"
+                        className="mt-1"
+                      />
+                    </div>
                   )}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {checked === null ? (
-            <div className="flex gap-3">
-              <Button
-                size="lg"
-                className="flex-1"
-                onClick={check}
-                disabled={typed.trim() === ""}
-              >
-                Check answer <span className="text-primary-foreground/60">(enter)</span>
+          {revisiting ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Button size="lg" variant="outline" onClick={goBack} disabled={index === 0}>
+                <ChevronLeft /> Previous card
               </Button>
-              <Button size="lg" variant="outline" onClick={reveal}>
-                <Eye /> I don&apos;t know
+              <Button size="lg" onClick={goForward}>
+                Next card <ChevronRight />
               </Button>
             </div>
+          ) : checked === null ? (
+            <>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={check}
+                  disabled={typed.trim() === "" || review.isPending}
+                >
+                  Check answer <span className="text-primary-foreground/60">(enter)</span>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => void reveal()}
+                  disabled={review.isPending}
+                >
+                  <Eye /> I don&apos;t know
+                </Button>
+              </div>
+              {index > 0 && (
+                <Button size="lg" variant="outline" className="mt-3 w-full" onClick={goBack}>
+                  <ChevronLeft /> Previous card
+                </Button>
+              )}
+            </>
           ) : (
-            <Button size="lg" className="w-full" onClick={advance}>
-              Next card <span className="text-primary-foreground/60">(enter)</span>
-            </Button>
+            <div className={index > 0 ? "grid grid-cols-2 gap-3" : ""}>
+              {index > 0 && (
+                <Button size="lg" variant="outline" onClick={goBack}>
+                  <ChevronLeft /> Previous card
+                </Button>
+              )}
+              <Button size="lg" className="w-full" onClick={advance}>
+                Next card <span className="text-primary-foreground/60">(enter)</span>
+              </Button>
+            </div>
           )}
         </>
       )}

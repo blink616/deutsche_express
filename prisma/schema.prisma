@@ -32,12 +32,28 @@ model Word {
   @@index([addedOn])
 }
 
+model StudySession {
+  id        String   @id @db.Uuid
+  deck      String
+  startedAt DateTime @default(now())
+  reviews   Review[]
+
+  @@index([startedAt])
+}
+
 model Review {
-  id         Int      @id @default(autoincrement())
-  wordId     Int
-  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  correct    Boolean
-  reviewedAt DateTime @default(now())
+  id              Int           @id @default(autoincrement())
+  wordId          Int
+  word            Word          @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  sessionId       String?       @db.Uuid
+  session         StudySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  correct         Boolean
+  mode            String?
+  submittedAnswer String?
+  mistakeKind     String?
+  reviewedAt      DateTime      @default(now())
 
   @@index([reviewedAt])
+  @@index([sessionId])
+  @@index([wordId, correct, reviewedAt])
 }

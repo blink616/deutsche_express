@@ -16,16 +16,5 @@ services:
       timeout: 5s
       retries: 12
 
-  web:
-    build: .
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://deutsch:deutsch@db:5432/deutsche_express
-    depends_on:
-      db:
-        condition: service_healthy
-
 volumes:
   db-data:

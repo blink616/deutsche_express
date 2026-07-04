@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { CopyButton } from "@/components/copy-button";
 import {
   Table,
   TableBody,
@@ -84,18 +85,42 @@ export function DayDetail({ date }: { date: string }) {
                   const status = STATUS[w.status] ?? STATUS.NEW;
                   return (
                     <TableRow key={w.id}>
-                      <TableCell className="font-medium">{w.german}</TableCell>
-                      <TableCell>{w.english}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          {w.german}
+                          <CopyButton text={w.german} label="Copy German word" compact />
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1">
+                          {w.english}
+                          <CopyButton text={w.english} label="Copy English word" compact />
+                        </span>
+                      </TableCell>
                       <TableCell className="max-w-xs text-muted-foreground">
                         {w.exampleGerman && (
-                          <p className="truncate italic" title={w.exampleGerman}>
-                            {w.exampleGerman}
-                          </p>
+                          <div className="flex items-center gap-1">
+                            <p className="min-w-0 flex-1 truncate italic" title={w.exampleGerman}>
+                              {w.exampleGerman}
+                            </p>
+                            <CopyButton
+                              text={w.exampleGerman}
+                              label="Copy German example"
+                              compact
+                            />
+                          </div>
                         )}
                         {w.exampleEnglish && (
-                          <p className="truncate" title={w.exampleEnglish}>
-                            {w.exampleEnglish}
-                          </p>
+                          <div className="flex items-center gap-1">
+                            <p className="min-w-0 flex-1 truncate" title={w.exampleEnglish}>
+                              {w.exampleEnglish}
+                            </p>
+                            <CopyButton
+                              text={w.exampleEnglish}
+                              label="Copy English example"
+                              compact
+                            />
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>

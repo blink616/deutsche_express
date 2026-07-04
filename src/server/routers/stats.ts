@@ -6,13 +6,16 @@ export const statsRouter = router({
   overview: publicProcedure
     .input(z.object({ startOfToday: z.date() }))
     .query(async ({ input }) => {
-      const [totalWords, byStatus, totalReviews, correctReviews, reviewsToday] =
+      const [totalWords, byStatus, totalReviews, correctReviews, reviewsToday, mistakes] =
         await Promise.all([
           prisma.word.count(),
           prisma.word.groupBy({ by: ["status"], _count: { _all: true } }),
           prisma.review.count(),
           prisma.review.count({ where: { correct: true } }),
           prisma.review.count({ where: { reviewedAt: { gte: input.startOfToday } } }),
+          prisma.word.count({
+            where: { incorrect: { gt: 0 }, status: { not: "LEARNED" } },
+          }),
         ]);
 
       const count = (status: "NEW" | "LEARNING" | "LEARNED") =>
@@ -25,6 +28,7 @@ export const statsRouter = router({
         fresh: count("NEW"),
         totalReviews,
         reviewsToday,
+        mistakes,
         accuracy:
           totalReviews === 0 ? null : Math.round((correctReviews / totalReviews) * 100),
       };
