@@ -47,11 +47,29 @@ function stripArticle(s: string): string {
   return parts.length > 1 && ARTICLES.includes(parts[0]) ? parts.slice(1).join(" ") : s;
 }
 
+/** Expand an expected answer into its accepted variants: each
+ *  slash-separated alternative counts, and parenthetical parts are
+ *  optional — "das Gespräch (die Gespräche)" accepts "das Gespräch",
+ *  "(sich) freuen" accepts both "freuen" and "sich freuen". */
+function acceptedVariants(expected: string): string[] {
+  const variants = new Set<string>();
+  for (const alt of expected.split("/")) {
+    for (const form of [alt, alt.replace(/\([^)]*\)/g, " "), alt.replace(/[()]/g, " ")]) {
+      const v = normalize(form);
+      if (v) variants.add(v);
+    }
+  }
+  return [...variants];
+}
+
 function gradeAnswer(input: string, expected: string): { correct: boolean; articleHint: boolean } {
   const a = normalize(input);
-  const b = normalize(expected);
-  if (a === b) return { correct: true, articleHint: false };
-  if (stripArticle(a) === stripArticle(b)) return { correct: false, articleHint: true };
+  const variants = acceptedVariants(expected);
+  if (variants.includes(a)) return { correct: true, articleHint: false };
+  const stripped = stripArticle(a);
+  if (variants.some((v) => stripArticle(v) === stripped)) {
+    return { correct: false, articleHint: true };
+  }
   return { correct: false, articleHint: false };
 }
 
