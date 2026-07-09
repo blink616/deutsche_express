@@ -70,6 +70,24 @@ export const wordsRouter = router({
     }));
   }),
 
+  exportAll: publicProcedure.query(() =>
+    prisma.word.findMany({
+      orderBy: [{ addedOn: "desc" }, { id: "asc" }],
+      select: {
+        german: true,
+        english: true,
+        exampleGerman: true,
+        exampleEnglish: true,
+        addedOn: true,
+        status: true,
+        correct: true,
+        incorrect: true,
+        streak: true,
+        lastReviewedAt: true,
+      },
+    }),
+  ),
+
   byDate: publicProcedure
     .input(z.object({ date: dateString }))
     .query(({ input }) =>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { DownloadWordsButton } from "@/components/download-words-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDay, localToday } from "@/lib/format";
@@ -46,6 +47,7 @@ export default function DashboardPage() {
                 <Target /> Practice unlearned
               </Link>
             </Button>
+            <DownloadWordsButton />
             {overview.data.mistakes > 0 && (
               <Button
                 variant="outline"
