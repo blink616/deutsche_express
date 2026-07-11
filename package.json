@@ -27,6 +27,7 @@
     "react": "^19.1.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.1.0",
+    "react-resizable-panels": "^4.12.1",
     "shadcn": "^4.13.0",
     "superjson": "^2.2.2",
     "tailwind-merge": "^3.6.0",
